@@ -1,0 +1,187 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Parameters": {
+        "restApiName": {
+            "Type": "String",
+            "Default": "stepApi"
+        }
+    },
+    "Resources": {
+        "MyStepFunction": {
+            "Type": "AWS::StepFunctions::StateMachine",
+            "Properties": {
+                "StateMachineName": "HelloWorld-StateMachine",
+                "StateMachineType": "EXPRESS",
+                "DefinitionString": "{\"Comment\": \"A Hello World example of the Amazon States Language using Pass states\", \"StartAt\": \"Hello\", \"States\": {\"Hello\": { \"Type\": \"Pass\", \"Result\": \"Hello\", \"Next\": \"World\" }, \"World\": { \"Type\": \"Pass\", \"Result\": \"World\", \"End\": true } } }",
+                "RoleArn": {
+                    "Fn::GetAtt": [
+                        "StepFunctionRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "StepFuncGateway": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Ref": "restApiName"
+                },
+                "Body": {
+                    "openapi": "3.0.1",
+                    "info": {
+                        "title": "processFormExample",
+                        "version": "2020-11-06 15:32:29UTC"
+                    },
+                    "paths": {
+                        "/step": {
+                            "post": {
+                                "responses": {
+                                    "200": {
+                                        "description": "Pet updated.",
+                                        "content": {
+                                            "application/json": {},
+                                            "application/xml": {}
+                                        }
+                                    },
+                                    "405": {
+                                        "description": "Method Not Allowed",
+                                        "content": {
+                                            "application/json": {},
+                                            "application/xml": {}
+                                        }
+                                    }
+                                },
+                                "parameters": [],
+                                "x-amazon-apigateway-integration": {
+                                    "integrationSubtype": "StepFunctions-StartSyncExecution",
+                                    "credentials": {
+                                        "Fn::GetAtt": [
+                                            "APIGatewayRole",
+                                            "Arn"
+                                        ]
+                                    },
+                                    "requestTemplates": {
+                                        "application/json": {
+                                            "Fn::Sub": [
+                                                "{\"input\": \"$util.escapeJavaScript($input.json('$'))\",\"stateMachineArn\": \"${arn}\"}",
+                                                {
+                                                    "arn": {
+                                                        "Fn::GetAtt": [
+                                                            "MyStepFunction",
+                                                            "Arn"
+                                                        ]
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    "httpMethod": "POST",
+                                    "uri": {
+                                        "Fn::Join": [
+                                            "",
+                                            [
+                                                "arn:aws:apigateway:",
+                                                {
+                                                    "Ref": "AWS::Region"
+                                                },
+                                                ":states:action/StartSyncExecution"
+                                            ]
+                                        ]
+                                    },
+                                    "payloadFormatVersion": "1.0",
+                                    "passthroughBehavior": "NEVER",
+                                    "type": "AWS",
+                                    "connectionType": "INTERNET"
+                                }
+                            }
+                        }
+                    },
+                    "x-amazon-apigateway-cors": {
+                        "allowMethods": [
+                            "*"
+                        ],
+                        "maxAge": 0,
+                        "allowCredentials": false,
+                        "allowOrigins": [
+                            "*"
+                        ]
+                    }
+                }
+            },
+            "DependsOn": [
+                "APIGatewayRole",
+                "MyStepFunction"
+            ],
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "296f2167-0565-4c60-bd44-a5609d9c7eb8"
+                }
+            }
+        },
+        "APIGatewayRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "apigateway.amazonaws.com"
+                                ]
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Path": "/",
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs",
+                    "arn:aws:iam::aws:policy/AWSStepFunctionsFullAccess"
+                ]
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "3dc073a9-c949-473d-a9c1-3d07f9646305"
+                }
+            }
+        },
+        "StepFunctionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "states.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Path": "/",
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaRole"
+                ]
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "25a439f9-9a42-4a37-be4f-b6694228866e"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "HelloWorldApi": {
+            "Description": "Sync WF API endpoint",
+            "Value": {
+                "Fn::Sub": "https://${StepFuncGateway}.execute-api.${AWS::Region}.amazonaws.com/step"
+            }
+        }
+    }
+}
