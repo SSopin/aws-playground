@@ -1,0 +1,185 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Parameters": {
+        "CodeBucket": {
+            "Description": "S3 Bucket name where your code is stored. Put Bucket Name only. This Bucket Need to Exist in the Account",
+            "Type": "String"
+        },
+        "StepFunctionS3FilePath": {
+            "Description": "Path on S3 where your StepFunction code is located. It should File Path and File Name. Example: myFloder/stepCode.json.",
+            "Type": "String"
+        }
+    },
+    "Resources": {
+        "OrchestratorStepFunction": {
+            "Type": "AWS::StepFunctions::StateMachine",
+            "Properties": {
+                "StateMachineName": "Orchestrator-StateMachine",
+                "StateMachineType": "EXPRESS",
+                "DefinitionS3Location": {
+                    "Bucket" : {
+                        "Ref": "CodeBucket"
+                    },
+                    "Key" : {
+                        "Ref": "StepFunctionS3FilePath"
+                    }
+                },
+                "RoleArn": {
+                    "Fn::GetAtt": [
+                        "StepFunctionRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+
+        "StepFuncGateway": {
+            "Type": "AWS::ApiGatewayV2::Api",
+            "Properties": {
+                "ProtocolType": "HTTP",
+                "Name": "StepFuncGatewayApi"
+            },
+            "DependsOn": [
+                "OrchestratorStepFunction"
+            ]
+        },
+
+        "StepIntegration": {
+            "Type": "AWS::ApiGatewayV2::Integration",
+            "Properties": {
+                "ApiId": {
+                    "Ref": "StepFuncGateway"
+                },
+                "Description": "StepFunction integration",
+                "IntegrationType": "AWS_PROXY",
+                "IntegrationSubtype": "StepFunctions-StartSyncExecution",
+                "ConnectionType": "INTERNET",
+                "PassthroughBehavior": "WHEN_NO_MATCH",
+                "PayloadFormatVersion": "1.0",
+                "CredentialsArn": {
+                    "Fn::GetAtt": [
+                        "APIGatewayRole",
+                        "Arn"
+                    ]
+                },
+                "RequestParameters": {
+                    "Input": "$request.body",
+                    "StateMachineArn": {
+                        "Fn::GetAtt": [
+                            "OrchestratorStepFunction",
+                            "Arn"
+                        ]
+                    }
+                }
+            },
+            "DependsOn": [
+                "StepFuncGateway"
+            ]
+        },
+        "StepRoute": {
+            "Type": "AWS::ApiGatewayV2::Route",
+            "Properties": {
+                "ApiId": {
+                    "Ref": "StepFuncGateway"
+                },
+                "RouteKey": "POST /step",
+                "Target": {
+                    "Fn::Join": [
+                        "/",
+                        [
+                            "integrations",
+                            {
+                                "Ref": "StepIntegration"
+                            }
+                        ]
+                    ]
+                }
+            },
+            "DependsOn": [
+                "StepFuncGateway",
+                "StepIntegration"
+            ]
+        },
+        "ApiDeployment": {
+            "Type": "AWS::ApiGatewayV2::Deployment",
+            "DependsOn": [
+                "StepRoute"
+            ],
+            "Properties": {
+                "Description": "My deployment",
+                "ApiId": {
+                    "Ref": "StepFuncGateway"
+                }
+            }
+        },
+        "MyStage": {
+            "Type": "AWS::ApiGatewayV2::Stage",
+            "Properties": {
+                "StageName": "Prod",
+                "Description": "Prod Stage",
+                "DeploymentId": {
+                    "Ref": "ApiDeployment"
+                },
+                "ApiId": {
+                    "Ref": "StepFuncGateway"
+                }
+            },
+            "DependsOn": [
+                "StepFuncGateway",
+                "ApiLogGroup"
+            ]
+        },
+        "APIGatewayRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "apigateway.amazonaws.com"
+                                ]
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Path": "/",
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs",
+                    "arn:aws:iam::aws:policy/AWSStepFunctionsFullAccess"
+                ]
+            }
+        },
+        "StepFunctionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "states.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Path": "/",
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaRole"
+                ]
+            }
+        },
+        "ApiLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "RetentionInDays": 7
+            }
+        }
+    }
+}

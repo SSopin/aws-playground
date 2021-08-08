@@ -1,0 +1,64 @@
+{
+    "Comment": "Product Orchestration Step Function",
+    "StartAt": "ProductServiceFunction",
+    "States": {
+      "ProductServiceFunction": {
+        "Type": "Task",
+        "Resource": "{LambdaARN}",
+        "Parameters": {
+          "user.$": "$.user"
+        },
+        "OutputPath": "$.body",
+        "Next": "Orchestration"
+      },
+      "Orchestration": {
+        "Type": "Parallel",
+        "End": true,
+        "Branches": [
+            {
+                "StartAt": "PathThrough",
+                "States": {
+                    "PathThrough": {
+                        "Type": "Pass",
+                        "End": true,
+                        "ResultPath": null
+                    }
+                }
+            },
+            {
+                "StartAt": "SupplementaryFunctions",
+                "States": {
+                    "SupplementaryFunctions": {
+                        "Type": "Parallel",
+                        "End": true,
+                        "Branches": [
+                            {
+                                "StartAt": "FinEligibility",
+                                "States": {
+                                    "FinEligibility": {
+                                        "Type": "Task",
+                                        "Resource": "{LambdaARN}",
+                                        "OutputPath": "$.body",
+                                        "End": true
+                                    }
+                                }
+                            },
+                            {
+                                "StartAt": "ProductAvailability",
+                                "States": {
+                                    "ProductAvailability": {
+                                        "Type": "Task",
+                                        "Resource": "{LambdaARN}",
+                                        "OutputPath": "$.body",
+                                        "End": true
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        ]
+      }
+    }
+}

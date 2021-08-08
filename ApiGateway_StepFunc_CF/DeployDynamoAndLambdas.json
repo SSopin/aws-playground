@@ -1,0 +1,160 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Parameters": {
+        "CodeBucket": {
+            "Description": "S3 Bucket name where your code is stored. Put Bucket Name only. This Bucket Need to Exist in the Account",
+            "Type": "String"
+        },
+        "ProductServiceLambdaS3FilePath": {
+            "Description": "Path on S3 where your ProductServiceLambda code is located. It should File Path and File Name. Example: myFloder/code.py.",
+            "Type": "String"
+        },
+        "FinServiceLambdaS3FilePath": {
+            "Description": "Path on S3 where your FinServiceLambda code is located. It should File Path and File Name. Example: myFloder/code.py.",
+            "Type": "String"
+        },
+        "AvailabilityServiceLambdaS3FilePath": {
+            "Description": "Path on S3 where your AvailabilityServiceLambda code is located. It should File Path and File Name. Example: myFloder/code.py.",
+            "Type": "String"
+        }
+    },
+    "Resources": {
+        "ProductTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": "product",
+                "BillingMode": "PAY_PER_REQUEST",
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName" : "user",
+                        "AttributeType" : "N"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName" : "user",
+                        "KeyType" : "HASH"
+                    }
+                ]
+            }
+        },
+        "ProductServiceLambda": {
+            "Type" : "AWS::Lambda::Function",
+            "Properties" : {
+                "FunctionName": "ProductServiceFunction",
+                "Runtime": "python3.8",
+                "PackageType": "Zip",
+                "Handler": "product_function.lambda_handler",
+                "Code": {
+                    "S3Bucket" : {
+                        "Ref": "CodeBucket"
+                    },
+                    "S3Key": {
+                        "Ref": "ProductServiceLambdaS3FilePath"
+                    }
+                },
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "FinServiceLambda": {
+            "Type" : "AWS::Lambda::Function",
+            "Properties" : {
+                "FunctionName": "FinServiceFunction",
+                "Runtime": "python3.8",
+                "PackageType": "Zip",
+                "Handler": "fin_function.lambda_handler",
+                "Code": {
+                    "S3Bucket" : {
+                        "Ref": "CodeBucket"
+                    },
+                    "S3Key": {
+                        "Ref": "FinServiceLambdaS3FilePath"
+                    }
+                },
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "AvailabilityServiceLambda": {
+            "Type" : "AWS::Lambda::Function",
+            "Properties" : {
+                "FunctionName": "AvailabilityServiceFunction",
+                "Runtime": "python3.8",
+                "PackageType": "Zip",
+                "Handler": "availability_function.lambda_handler",
+                "Code": {
+                    "S3Bucket" : {
+                        "Ref": "CodeBucket"
+                    },
+                    "S3Key": {
+                        "Ref": "AvailabilityServiceLambdaS3FilePath"
+                    }
+                },
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "LambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Path": "/",
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaDynamoDBExecutionRole",
+                    "arn:aws:iam::aws:policy/AmazonDynamoDBReadOnlyAccess"
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "ProductServiceLambdaARN": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "ProductServiceLambda",
+                    "Arn"
+                ]
+            }
+        },
+        "AvailabilityServiceLambdaARN": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "AvailabilityServiceLambda",
+                    "Arn"
+                ]
+            }
+        }, 
+        "FinServiceLambdaARN": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "FinServiceLambda",
+                    "Arn"
+                ]
+            }
+        }
+    }
+}
